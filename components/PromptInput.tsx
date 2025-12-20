@@ -44,19 +44,36 @@ export default function PromptInput({ onGenerate, isGenerating, error, appTheme,
   }
 
   return (
-    <div{/* Theme Toggle Button */}
-        <div className="mb-4 flex justify-end">
-          <button
-            onClick={onToggleTheme}
-            className="rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-            style={{
-              backgroundColor: colors.cardBackground,
-              color: colors.text,
-              border: `1px solid ${colors.border}`,
-            }}
-          >
-            {appTheme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode'}
-          </button>" style={{ color: colors.text }}>
+    <div className="min-h-screen transition-colors" style={{ backgroundColor: colors.background }}>
+      {/* Theme Toggle Button */}
+      <div className="mb-4 flex justify-end px-6 pt-6">
+        <button
+          onClick={onToggleTheme}
+          className="rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+          style={{
+            backgroundColor: colors.cardBackground,
+            color: colors.text,
+            border: `1px solid ${colors.border}`,
+          }}
+        >
+          {appTheme === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode'}
+        </button>
+      </div>
+
+      <div className="flex min-h-screen items-center justify-center px-6">
+        <form onSubmit={handleSubmit} className="w-full max-w-2xl space-y-6 rounded-lg border p-8 shadow-lg transition-colors" style={{ backgroundColor: colors.cardBackground, borderColor: colors.border }}>
+          <div className="text-center">
+            <h1 className="mb-2 text-3xl font-bold transition-colors" style={{ color: colors.text }}>
+              Diagram Generator
+            </h1>
+            <p className="transition-colors" style={{ color: colors.text, opacity: 0.7 }}>
+              Convert your ideas into beautiful diagrams with AI
+            </p>
+          </div>
+
+          {/* Chart Name Input */}
+          <div>
+            <label htmlFor="chartName" className="mb-2 block text-sm font-medium" style={{ color: colors.text }}>
               Chart Name (Optional)
             </label>
             <input
@@ -78,21 +95,6 @@ export default function PromptInput({ onGenerate, isGenerating, error, appTheme,
           {/* Theme Selection */}
           <div>
             <label className="mb-3 block text-sm font-medium" style={{ color: colors.text }}>
-              Choose Diagram
-            <input
-              id="chartName"
-              type="text"
-              value={chartName}
-              onChange={(e) => setChartName(e.target.value)}
-              placeholder="My Awesome Diagram"
-              className="w-full rounded-lg border-2 border-gray-300 px-4 py-2 text-black placeholder-gray-400 transition-all focus:border-black focus:outline-none focus:ring-2 focus:ring-black"
-              disabled={isGenerating}
-            />
-          </div>
-
-          {/* Theme Selection */}
-          <div>
-            <label className="mb-3 block text-sm font-medium text-black">
               Choose Theme
             </label>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -104,17 +106,36 @@ export default function PromptInput({ onGenerate, isGenerating, error, appTheme,
                   disabled={isGenerating}
                   className={`relative overflow-hidden rounded-lg border-2 p-4 transition-all ${
                     selectedTheme === key
-                      ? 'border-black ring-2 ring-black'
-                      : 'border-gray-300 hover:border-gray-400'
+                      ? 'ring-2'
+                      : 'hover:opacity-80'
                   }`}
-                  style={{ backgroundColor: theme.background }}
+                  style={{ 
+                    backgroundColor: theme.background,
+                    borderColor: selectedTheme === key ? colors.buttonBackground : colors.border,
+                    ringColor: selectedTheme === key ? colors.buttonBackground : 'transparent'
+                  }}
                 >
                   {/* Theme Preview */}
                   <div className="mb-2 flex items-center justify-center">
                     <div
                       className="h-8 w-12 rounded border-2"
                       style={{
-                        backgroundColor: theme.nodeBackground," style={{ color: colors.text }}>
+                        backgroundColor: theme.nodeBackground,
+                        borderColor: theme.nodeBorder,
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs font-medium" style={{ color: colors.text }}>
+                    {theme.name}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Prompt Input */}
+          <div>
+            <label htmlFor="prompt" className="mb-2 block text-sm font-medium" style={{ color: colors.text }}>
               Describe Your Diagram
             </label>
             <textarea
@@ -150,30 +171,10 @@ export default function PromptInput({ onGenerate, isGenerating, error, appTheme,
             {isGenerating ? 'Generating...' : 'Generate Diagram'}
           </button>
         </form>
+      </div>
 
-        <div className="mt-8 text-center text-xs" style={{ color: colors.text, opacity: 0.5 }}der-2 border-black px-4 py-3 text-black placeholder-gray-400 transition-all focus:outline-none focus:ring-2 focus:ring-black"
-              disabled={isGenerating}
-            />
-          </div>
-
-          {error && (
-            <div className="rounded border border-red-500 bg-red-50 px-4 py-2 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={!prompt.trim() || isGenerating}
-            className="w-full rounded-lg bg-black px-6 py-3 font-medium text-white transition-opacity hover:opacity-80 disabled:opacity-50"
-          >
-            {isGenerating ? 'Generating...' : 'Generate Diagram'}
-          </button>
-        </form>
-
-        <div className="mt-8 text-center text-xs text-gray-500">
-          Supports: Flowcharts, Org Charts, Decision Trees, Timelines, Architecture Diagrams
-        </div>
+      <div className="pb-8 text-center text-xs transition-colors" style={{ color: colors.text, opacity: 0.5 }}>
+        Supports: Flowcharts, Org Charts, Decision Trees, Timelines, Architecture Diagrams
       </div>
     </div>
   )

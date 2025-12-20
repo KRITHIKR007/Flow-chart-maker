@@ -35,9 +35,11 @@ A modern, feature-rich web application that converts natural language prompts in
 - **Architecture** - System component relationships
 
 ### 💾 Export Options
-- **PNG Export** - High-quality 1920x1080 images with proper theming
-- **SVG Export** - Vector graphics for scalability
-- **JSON Export** - Save diagram structure for later use
+- **PNG Export** - Captures exact diagram with all nodes, edges, and images
+- **SVG Export** - Vector graphics with full node and edge preservation
+- **High Quality** - 2x scale for crisp, professional output
+- **Smart Cropping** - Exports only the diagram area with padding
+- **Image Support** - Includes all uploaded photos in nodes
 
 ## 🛠️ Tech Stack
 
@@ -69,11 +71,8 @@ npm install
 ```
 
 3. Set up environment variables:
-```bash
-cp .env.local.example .env.local
-```
 
-Edit `.env.local` and add your Hugging Face API token:
+Create a `.env.local` file in the root directory:
 ```
 HUGGINGFACE_API_KEY=hf_your_token_here
 ```
@@ -206,8 +205,11 @@ Edit `.react-flow__node` styles in `app/globals.css`
 - Preserves colors and images
 
 ### Export System
-- **PNG**: Uses html2canvas for high-quality export
-- Respects selected theme colors
+- **PNG**: Captures exact diagram bounds with all visual elements
+- **SVG**: Vector format with nodes, edges, and backgrounds
+- **Smart Bounds**: Auto-calculates diagram size with 50px padding
+- **Image Preservation**: Includes all uploaded photos using CORS support
+- **Theme Aware**: Exports with selected diagram theme colors
 - Filename based on chart name
 
 ### Theme Persistence
@@ -243,9 +245,10 @@ npm install
 - Restart the dev server after changing env variables
 
 ### Export not working
-- PNG export requires html2canvas (already installed)
-- Check browser console for errors
-- Try a different browser
+- PNG export requires html2canvas (automatically installed)
+- For image exports: ensure uploaded images are from CORS-enabled sources
+- Clear browser cache if exports appear blank
+- Check browser console for specific errors
 
 ## 🙏 Acknowledgments
 

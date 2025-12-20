@@ -6,6 +6,7 @@ import ReactFlow, {
   Edge,
   Controls,
   Background,
+  BackgroundVariant,
   useNodesState,
   useEdgesState,
   NodeChange,
@@ -14,11 +15,9 @@ import ReactFlow, {
   addEdge,
   MiniMap,
   NodeTypes,
-  useReactFlow,
   getRectOfNodes,
   getTransformForBounds,
 } from 'reactflow'
-import { toPng } from 'html2canvas'
 import 'reactflow/dist/style.css'
 import type { DiagramData } from '@/types/diagram'
 import { convertDiagramToFlow } from '@/lib/layoutUtils'
@@ -59,8 +58,6 @@ export default function DiagramCanvas({ diagramData, chartName, theme, appTheme,
   const [history, setHistory] = useState<HistoryState[]>([{ nodes: initialNodes, edges: initialEdges }])
   const [historyIndex, setHistoryIndex] = useState(0)
   const isUndoRedoAction = useRef(false)
-
-  const reactFlowInstance = useReactFlow()
 
   // Save to history whenever nodes or edges change
   useEffect(() => {
@@ -312,14 +309,14 @@ export default function DiagramCanvas({ diagramData, chartName, theme, appTheme,
   // Export diagram as PNG
   const handleExportPNG = useCallback(async () => {
     const nodesBounds = getRectOfNodes(nodesWithCallbacks)
-    const imageWidth = 1920
-    const imageHeight = 1080
+    const padding = 50
     
-    const transform = getTransformForBounds(nodesBounds, imageWidth, imageHeight, 0.5, 2, 0.2)
+    const imageWidth = nodesBounds.width + padding * 2
+    const imageHeight = nodesBounds.height + padding * 2
 
-    const viewportElement = document.querySelector('.react-flow__viewport') as HTMLElement
+    const reactFlowWrapper = document.querySelector('.react-flow') as HTMLElement
 
-    if (!viewportElement) {
+    if (!reactFlowWrapper) {
       showNotification('Export failed: Canvas not found')
       return
     }
@@ -327,12 +324,42 @@ export default function DiagramCanvas({ diagramData, chartName, theme, appTheme,
     try {
       const html2canvas = (await import('html2canvas')).default
       
+      // Get the viewport element that contains both nodes and edges
+      const viewportElement = reactFlowWrapper.querySelector('.react-flow__viewport') as HTMLElement
+      
+      if (!viewportElement) {
+        showNotification('Export failed: Viewport not found')
+        return
+      }
+
+      // Calculate the current transform to get visible area
+      const transform = viewportElement.style.transform
+      
+      // Temporarily adjust viewport to show only the diagram
+      const originalTransform = viewportElement.style.transform
+      viewportElement.style.transform = `translate(${padding - nodesBounds.x}px, ${padding - nodesBounds.y}px) scale(1)`
+      
+      // Create a container with exact dimensions
+      const tempContainer = document.createElement('div')
+      tempContainer.style.width = `${imageWidth}px`
+      tempContainer.style.height = `${imageHeight}px`
+      tempContainer.style.position = 'relative'
+      tempContainer.style.backgroundColor = currentTheme.background
+
       const canvas = await html2canvas(viewportElement, {
         backgroundColor: currentTheme.background,
         width: imageWidth,
         height: imageHeight,
         scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        x: nodesBounds.x - padding,
+        y: nodesBounds.y - padding,
       })
+
+      // Restore original transform
+      viewportElement.style.transform = originalTransform
 
       const link = document.createElement('a')
       link.download = `${chartName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.png`
@@ -348,8 +375,69 @@ export default function DiagramCanvas({ diagramData, chartName, theme, appTheme,
 
   // Export diagram as SVG
   const handleExportSVG = useCallback(() => {
-    alert('Export SVG: In production, this would serialize the SVG elements.')
-  }, [])
+    const nodesBounds = getRectOfNodes(nodesWithCallbacks)
+    const padding = 50
+    
+    const svgWidth = nodesBounds.width + padding * 2
+    const svgHeight = nodesBounds.height + padding * 2
+
+    const svgElement = document.querySelector('.react-flow__edges') as SVGElement
+    const nodesElement = document.querySelector('.react-flow__nodes') as HTMLElement
+
+    if (!svgElement || !nodesElement) {
+      showNotification('Export failed: Canvas not found')
+      return
+    }
+
+    try {
+      // Create SVG with proper bounds
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      svg.setAttribute('width', svgWidth.toString())
+      svg.setAttribute('height', svgHeight.toString())
+      svg.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`)
+      svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+
+      // Add background
+      const background = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+      background.setAttribute('width', '100%')
+      background.setAttribute('height', '100%')
+      background.setAttribute('fill', currentTheme.background)
+      svg.appendChild(background)
+
+      // Clone and add edges
+      const edgesClone = svgElement.cloneNode(true) as SVGElement
+      edgesClone.setAttribute('transform', `translate(${padding - nodesBounds.x}, ${padding - nodesBounds.y})`)
+      svg.appendChild(edgesClone)
+
+      // Add nodes as foreignObject
+      const foreignObject = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject')
+      foreignObject.setAttribute('x', (padding - nodesBounds.x).toString())
+      foreignObject.setAttribute('y', (padding - nodesBounds.y).toString())
+      foreignObject.setAttribute('width', nodesBounds.width.toString())
+      foreignObject.setAttribute('height', nodesBounds.height.toString())
+      
+      const nodesClone = nodesElement.cloneNode(true) as HTMLElement
+      foreignObject.appendChild(nodesClone)
+      svg.appendChild(foreignObject)
+
+      // Serialize and download
+      const serializer = new XMLSerializer()
+      const svgString = serializer.serializeToString(svg)
+      const blob = new Blob([svgString], { type: 'image/svg+xml' })
+      const url = URL.createObjectURL(blob)
+
+      const link = document.createElement('a')
+      link.download = `${chartName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.svg`
+      link.href = url
+      link.click()
+
+      URL.revokeObjectURL(url)
+      showNotification('SVG exported successfully!')
+    } catch (error) {
+      console.error('SVG export error:', error)
+      showNotification('SVG export failed. Please try again.')
+    }
+  }, [nodesWithCallbacks, chartName, currentTheme])
 
   // Reset layout to original positions
   const handleResetLayout = useCallback(() => {
@@ -368,7 +456,8 @@ export default function DiagramCanvas({ diagramData, chartName, theme, appTheme,
 
   return (
     <div className="relative h-screen w-full">
-      {/* H
+      {/* Header toolbar */}
+      <div
         className="absolute left-0 right-0 top-0 z-10 px-6 py-4 transition-colors"
         style={{ 
           backgroundColor: colors.cardBackground,
@@ -390,7 +479,18 @@ export default function DiagramCanvas({ diagramData, chartName, theme, appTheme,
               className="rounded border px-4 py-2 text-sm font-medium transition-colors hover:opacity-80"
               style={{
                 backgroundColor: colors.buttonBackground,
-                color: colors.buttonTextpx-4 py-2 text-sm font-medium transition-colors hover:opacity-80 disabled:opacity-30"
+                color: colors.buttonText,
+                borderColor: colors.border,
+              }}
+            >
+              {appTheme === 'light' ? '🌙 Dark' : '☀️ Light'}
+            </button>
+
+            {/* Undo Button */}
+            <button
+              onClick={undo}
+              disabled={historyIndex <= 0}
+              className="rounded border px-4 py-2 text-sm font-medium transition-colors hover:opacity-80 disabled:opacity-30"
               style={{
                 backgroundColor: colors.cardBackground,
                 color: colors.text,
@@ -422,7 +522,27 @@ export default function DiagramCanvas({ diagramData, chartName, theme, appTheme,
                 backgroundColor: colors.cardBackground,
                 color: colors.text,
                 borderColor: colors.border,
-              }}px-4 py-2 text-sm font-medium transition-colors hover:opacity-80"
+              }}
+              title="Keyboard Shortcuts (?)"
+            >
+              ⌨️ Shortcuts
+            </button>
+
+            <button
+              onClick={handleResetLayout}
+              className="rounded border px-4 py-2 text-sm font-medium transition-colors hover:opacity-80"
+              style={{
+                backgroundColor: colors.cardBackground,
+                color: colors.text,
+                borderColor: colors.border,
+              }}
+            >
+              Reset Layout
+            </button>
+            
+            <button
+              onClick={() => setShowPrompt(!showPrompt)}
+              className="rounded border px-4 py-2 text-sm font-medium transition-colors hover:opacity-80"
               style={{
                 backgroundColor: colors.cardBackground,
                 color: colors.text,
@@ -463,51 +583,6 @@ export default function DiagramCanvas({ diagramData, chartName, theme, appTheme,
                 backgroundColor: colors.buttonBackground,
                 color: colors.buttonText,
               }}
-              className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-50 disabled:opacity-30"
-              title="Redo (Ctrl+Y)"
-            >
-              ↷ Redo
-            </button>
-
-            <button
-              onClick={() => setShowShortcuts(!showShortcuts)}
-              className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-50"
-              title="Keyboard Shortcuts (?)"
-            >
-              ⌨️ Shortcuts
-            </button>
-
-            <button
-              onClick={handleResetLayout}
-              className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-50"
-            >
-              Reset Layout
-            </button>
-            
-            <button
-              onClick={() => setShowPrompt(!showPrompt)}
-              className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-50"
-            >
-              Regenerate
-            </button>
-
-            <button
-              onClick={handleExportPNG}
-              className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-50"
-            >
-              Export PNG
-            </button>
-
-            <button
-              onClick={handleExportSVG}
-              className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-50"
-            >
-              Export SVG
-            </button>
-
-            <button
-              onClick={onReset}
-              className="rounded bg-black px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-80"
             >
               New Diagram
             </button>
@@ -519,21 +594,48 @@ export default function DiagramCanvas({ diagramData, chartName, theme, appTheme,
           <div className="mt-4 flex gap-2">
             <input
               type="text"
+              value={newChartName}
+              onChange={(e) => setNewChartName(e.target.value)}
+              placeholder="Chart name..."
+              className="rounded px-3 py-2 text-sm transition-colors"
+              style={{
+                backgroundColor: colors.inputBackground,
+                color: colors.text,
+                border: `1px solid ${colors.inputBorder}`,
+              }}
+              onKeyPress={(e) => e.key === 'Enter' && handleRegenerateSubmit()}
+            />
+            <input
+              type="text"
               value={newPrompt}
               onChange={(e) => setNewPrompt(e.target.value)}
               placeholder="Enter new prompt to regenerate..."
-              className="flex-1 rounded border-2 border-black px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+              className="flex-1 rounded px-3 py-2 text-sm transition-colors"
+              style={{
+                backgroundColor: colors.inputBackground,
+                color: colors.text,
+                border: `1px solid ${colors.inputBorder}`,
+              }}
               onKeyPress={(e) => e.key === 'Enter' && handleRegenerateSubmit()}
             />
             <button
               onClick={handleRegenerateSubmit}
-              className="rounded bg-black px-4 py-2 text-sm font-medium text-white"
+              className="rounded px-4 py-2 text-sm font-medium"
+              style={{
+                backgroundColor: colors.buttonBackground,
+                color: colors.buttonText,
+              }}
             >
               Generate
             </button>
             <button
               onClick={() => setShowPrompt(false)}
-              className="rounded border border-gray-300 px-4 py-2 text-sm"
+              className="rounded border px-4 py-2 text-sm"
+              style={{
+                backgroundColor: colors.cardBackground,
+                color: colors.text,
+                borderColor: colors.border,
+              }}
             >
               Cancel
             </button>
@@ -571,12 +673,7 @@ export default function DiagramCanvas({ diagramData, chartName, theme, appTheme,
               <ShortcutItem shortcut="Ctrl + N" description="Add new node" />
               <ShortcutItem shortcut="Delete" description="Delete selected items" />
               <ShortcutItem shortcut="Backspace" description="Delete selected items" />
-              <Shortcu
-            color={currentTheme.gridColor} 
-            gap={20} 
-            variant="dots"
-            size={2}
-         select all" />
+              <ShortcutItem shortcut="Escape" description="Deselect all" />
               <ShortcutItem shortcut="?" description="Show/hide shortcuts" />
               <ShortcutItem shortcut="Drag Node" description="Move node position" />
               <ShortcutItem shortcut="Drag Handle" description="Connect nodes" />
@@ -615,7 +712,12 @@ export default function DiagramCanvas({ diagramData, chartName, theme, appTheme,
           multiSelectionKeyCode="Control"
         >
           <Controls />
-          <Background color={currentTheme.gridColor} gap={16} />
+          <Background 
+            color={currentTheme.gridColor} 
+            gap={20} 
+            variant={BackgroundVariant.Dots}
+            size={2}
+          />
           <MiniMap
             nodeColor={(node) => (node.data.color as string) || currentTheme.nodeBackground}
             nodeStrokeColor={currentTheme.nodeBorder}
