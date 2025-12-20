@@ -1,18 +1,44 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import PromptInput from '@/components/PromptInput'
 import DiagramCanvas from '@/components/DiagramCanvas'
 import type { DiagramData } from '@/types/diagram'
+import type { ThemeName } from '@/lib/themes'
+import type { AppTheme } from '@/lib/appTheme'
+import { appThemes } from '@/lib/appTheme'
 
 export default function Home() {
   const [diagramData, setDiagramData] = useState<DiagramData | null>(null)
+  const [chartName, setChartName] = useState<string>('Untitled Diagram')
+  const [theme, setTheme] = useState<ThemeName>('classic')
+  const [appTheme, setAppTheme] = useState<AppTheme>('light')
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const handleGenerateDiagram = async (prompt: string) => {
+  // Load theme from localStorage on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('appTheme') as AppTheme
+    if (savedTheme) {
+      setAppTheme(savedTheme)
+    }
+  }, [])
+
+  // Save theme to localStorage when changed
+  useEffect(() => {
+    localStorage.setItem('appTheme', appTheme)
+    document.documentElement.style.backgroundColor = appThemes[appTheme].background
+  }, [appTheme])
+
+  const toggleAppTheme = () => {
+    setAppTheme((prev) => (prev === 'light' ? 'dark' : 'light'))
+  }
+
+  const handleGenerateDiagram = async (prompt: string, name: string, selectedTheme: ThemeName) => {
     setIsGenerating(true)
     setError(null)
+    setChartName(name)
+    setTheme(selectedTheme)
 
     try {
       const response = await fetch('/api/generate-diagram', {
@@ -45,19 +71,31 @@ export default function Home() {
   const handleReset = () => {
     setDiagramData(null)
     setError(null)
+    setChartName('Untitled Diagram')
   }
 
+  const currentAppTheme = appThemes[appTheme]
+
   return (
-    <main className="min-h-screen bg-white">
+    <main 
+      className="min-h-screen transition-colors duration-300"
+      style={{ backgroundColor: currentAppTheme.background }}
+    >
       {!diagramData ? (
         <PromptInput
           onGenerate={handleGenerateDiagram}
           isGenerating={isGenerating}
           error={error}
+          appTheme={appTheme}
+          onToggleTheme={toggleAppTheme}
         />
       ) : (
         <DiagramCanvas
           diagramData={diagramData}
+          chartName={chartName}
+          theme={theme}
+          appTheme={appTheme}
+          onToggleTheme={toggleAppTheme}
           onReset={handleReset}
           onRegenerate={handleGenerateDiagram}
         />

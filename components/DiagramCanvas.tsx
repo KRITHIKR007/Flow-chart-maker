@@ -15,16 +15,25 @@ import ReactFlow, {
   MiniMap,
   NodeTypes,
   useReactFlow,
+  getRectOfNodes,
+  getTransformForBounds,
 } from 'reactflow'
+import { toPng } from 'html2canvas'
 import 'reactflow/dist/style.css'
 import type { DiagramData } from '@/types/diagram'
 import { convertDiagramToFlow } from '@/lib/layoutUtils'
 import CustomNode from './CustomNode'
+import { themes, ThemeName } from '@/lib/themes'
+import { AppTheme, appThemes } from '@/lib/appTheme'
 
 interface DiagramCanvasProps {
   diagramData: DiagramData
+  chartName: string
+  theme: ThemeName
+  appTheme: AppTheme
+  onToggleTheme: () => void
   onReset: () => void
-  onRegenerate: (prompt: string) => void
+  onRegenerate: (prompt: string, chartName: string, theme: ThemeName) => void
 }
 
 interface HistoryState {
@@ -32,15 +41,19 @@ interface HistoryState {
   edges: Edge[]
 }
 
-export default function DiagramCanvas({ diagramData, onReset, onRegenerate }: DiagramCanvasProps) {
+export default function DiagramCanvas({ diagramData, chartName, theme, appTheme, onToggleTheme, onReset, onRegenerate }: DiagramCanvasProps) {
   const { nodes: initialNodes, edges: initialEdges } = convertDiagramToFlow(diagramData)
   
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [showPrompt, setShowPrompt] = useState(false)
   const [newPrompt, setNewPrompt] = useState('')
+  const [newChartName, setNewChartName] = useState(chartName)
   const [copiedNodes, setCopiedNodes] = useState<Node[]>([])
   const [showShortcuts, setShowShortcuts] = useState(false)
+  
+  const currentTheme = themes[theme]
+  const colors = appThemes[appTheme]
   
   // History for undo/redo
   const [history, setHistory] = useState<HistoryState[]>([{ nodes: initialNodes, edges: initialEdges }])
@@ -286,19 +299,52 @@ export default function DiagramCanvas({ diagramData, onReset, onRegenerate }: Di
           onColorChange: handleColorChange,
           onDelete: handleNodeDelete,
         },
+        style: {
+          ...node.style,
+          backgroundColor: node.data.color || currentTheme.nodeBackground,
+          borderColor: currentTheme.nodeBorder,
+          color: currentTheme.nodeText,
+        },
       })),
-    [nodes, handleImageUpload, handleColorChange, handleNodeDelete]
+    [nodes, handleImageUpload, handleColorChange, handleNodeDelete, currentTheme]
   )
 
   // Export diagram as PNG
-  const handleExportPNG = useCallback(() => {
-    const canvas = document.querySelector('.react-flow') as HTMLElement
-    if (!canvas) return
+  const handleExportPNG = useCallback(async () => {
+    const nodesBounds = getRectOfNodes(nodesWithCallbacks)
+    const imageWidth = 1920
+    const imageHeight = 1080
+    
+    const transform = getTransformForBounds(nodesBounds, imageWidth, imageHeight, 0.5, 2, 0.2)
 
-    // Using html2canvas would be ideal, but for simplicity we'll use a download trigger
-    // In production, you'd install html2canvas library
-    alert('Export PNG: In production, this would use html2canvas to export the diagram.')
-  }, [])
+    const viewportElement = document.querySelector('.react-flow__viewport') as HTMLElement
+
+    if (!viewportElement) {
+      showNotification('Export failed: Canvas not found')
+      return
+    }
+
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      
+      const canvas = await html2canvas(viewportElement, {
+        backgroundColor: currentTheme.background,
+        width: imageWidth,
+        height: imageHeight,
+        scale: 2,
+      })
+
+      const link = document.createElement('a')
+      link.download = `${chartName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+
+      showNotification('Diagram exported successfully!')
+    } catch (error) {
+      console.error('Export error:', error)
+      showNotification('Export failed. Please try again.')
+    }
+  }, [nodesWithCallbacks, chartName, currentTheme])
 
   // Export diagram as SVG
   const handleExportSVG = useCallback(() => {
@@ -314,7 +360,7 @@ export default function DiagramCanvas({ diagramData, onReset, onRegenerate }: Di
 
   const handleRegenerateSubmit = () => {
     if (newPrompt.trim()) {
-      onRegenerate(newPrompt.trim())
+      onRegenerate(newPrompt.trim(), newChartName || chartName, theme)
       setShowPrompt(false)
       setNewPrompt('')
     }
@@ -322,31 +368,34 @@ export default function DiagramCanvas({ diagramData, onReset, onRegenerate }: Di
 
   return (
     <div className="relative h-screen w-full">
-      {/* Header toolbar */}
-      <div className="absolute left-0 right-0 top-0 z-10 border-b border-gray-200 bg-white px-6 py-4">
+      {/* H
+        className="absolute left-0 right-0 top-0 z-10 px-6 py-4 transition-colors"
+        style={{ 
+          backgroundColor: colors.cardBackground,
+          borderBottom: `1px solid ${colors.border}`,
+        }}
+      >
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-black">
-              {diagramData.type.replace('_', ' ').toUpperCase()}
-            </h2>
-            <p className="text-sm text-gray-600">
-              {nodes.length} nodes, {edges.length} edges
+            <h2 className="text-xl font-bold" style={{ color: colors.text }}>{chartName}</h2>
+            <p className="text-sm" style={{ color: colors.text, opacity: 0.7 }}>
+              {diagramData.type.replace('_', ' ').toUpperCase()} • {nodes.length} nodes, {edges.length} edges • Theme: {currentTheme.name}
             </p>
           </div>
 
           <div className="flex gap-2">
+            {/* Theme Toggle */}
             <button
-              onClick={addNode}
-              className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-50"
-              title="Add New Node (Ctrl+N)"
-            >
-              ➕ Add Node
-            </button>
-
-            <button
-              onClick={undo}
-              disabled={historyIndex === 0}
-              className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-50 disabled:opacity-30"
+              onClick={onToggleTheme}
+              className="rounded border px-4 py-2 text-sm font-medium transition-colors hover:opacity-80"
+              style={{
+                backgroundColor: colors.buttonBackground,
+                color: colors.buttonTextpx-4 py-2 text-sm font-medium transition-colors hover:opacity-80 disabled:opacity-30"
+              style={{
+                backgroundColor: colors.cardBackground,
+                color: colors.text,
+                borderColor: colors.border,
+              }}
               title="Undo (Ctrl+Z)"
             >
               ↶ Undo
@@ -355,6 +404,65 @@ export default function DiagramCanvas({ diagramData, onReset, onRegenerate }: Di
             <button
               onClick={redo}
               disabled={historyIndex >= history.length - 1}
+              className="rounded border px-4 py-2 text-sm font-medium transition-colors hover:opacity-80 disabled:opacity-30"
+              style={{
+                backgroundColor: colors.cardBackground,
+                color: colors.text,
+                borderColor: colors.border,
+              }}
+              title="Redo (Ctrl+Y)"
+            >
+              ↷ Redo
+            </button>
+
+            <button
+              onClick={() => setShowShortcuts(!showShortcuts)}
+              className="rounded border px-4 py-2 text-sm font-medium transition-colors hover:opacity-80"
+              style={{
+                backgroundColor: colors.cardBackground,
+                color: colors.text,
+                borderColor: colors.border,
+              }}px-4 py-2 text-sm font-medium transition-colors hover:opacity-80"
+              style={{
+                backgroundColor: colors.cardBackground,
+                color: colors.text,
+                borderColor: colors.border,
+              }}
+            >
+              Regenerate
+            </button>
+
+            <button
+              onClick={handleExportPNG}
+              className="rounded border px-4 py-2 text-sm font-medium transition-colors hover:opacity-80"
+              style={{
+                backgroundColor: colors.cardBackground,
+                color: colors.text,
+                borderColor: colors.border,
+              }}
+            >
+              Export PNG
+            </button>
+
+            <button
+              onClick={handleExportSVG}
+              className="rounded border px-4 py-2 text-sm font-medium transition-colors hover:opacity-80"
+              style={{
+                backgroundColor: colors.cardBackground,
+                color: colors.text,
+                borderColor: colors.border,
+              }}
+            >
+              Export SVG
+            </button>
+
+            <button
+              onClick={onReset}
+              className="rounded px-4 py-2 text-sm font-medium transition-opacity hover:opacity-80"
+              style={{
+                backgroundColor: colors.buttonBackground,
+                color: colors.buttonText,
+              }}
               className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-gray-50 disabled:opacity-30"
               title="Redo (Ctrl+Y)"
             >
@@ -463,7 +571,12 @@ export default function DiagramCanvas({ diagramData, onReset, onRegenerate }: Di
               <ShortcutItem shortcut="Ctrl + N" description="Add new node" />
               <ShortcutItem shortcut="Delete" description="Delete selected items" />
               <ShortcutItem shortcut="Backspace" description="Delete selected items" />
-              <ShortcutItem shortcut="Escape" description="Deselect all" />
+              <Shortcu
+            color={currentTheme.gridColor} 
+            gap={20} 
+            variant="dots"
+            size={2}
+         select all" />
               <ShortcutItem shortcut="?" description="Show/hide shortcuts" />
               <ShortcutItem shortcut="Drag Node" description="Move node position" />
               <ShortcutItem shortcut="Drag Handle" description="Connect nodes" />
@@ -485,10 +598,13 @@ export default function DiagramCanvas({ diagramData, onReset, onRegenerate }: Di
       )}
 
       {/* React Flow Canvas */}
-      <div className="h-full w-full pt-24">
+      <div className="h-full w-full pt-24" style={{ backgroundColor: currentTheme.background }}>
         <ReactFlow
           nodes={nodesWithCallbacks}
-          edges={edges}
+          edges={edges.map(edge => ({
+            ...edge,
+            style: { ...edge.style, stroke: currentTheme.edgeColor }
+          }))}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
@@ -499,10 +615,10 @@ export default function DiagramCanvas({ diagramData, onReset, onRegenerate }: Di
           multiSelectionKeyCode="Control"
         >
           <Controls />
-          <Background color="#e5e5e5" gap={16} />
+          <Background color={currentTheme.gridColor} gap={16} />
           <MiniMap
-            nodeColor={(node) => (node.data.color as string) || '#ffffff'}
-            nodeStrokeColor="#000000"
+            nodeColor={(node) => (node.data.color as string) || currentTheme.nodeBackground}
+            nodeStrokeColor={currentTheme.nodeBorder}
             nodeStrokeWidth={2}
             maskColor="rgba(0, 0, 0, 0.1)"
           />
