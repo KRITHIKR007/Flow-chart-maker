@@ -2,6 +2,8 @@
 
 A modern, feature-rich web application that converts natural language prompts into interactive visual diagrams using AI. Create, customize, and export professional diagrams with ease!
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/KRITHIKR007/Flow-chart-maker&env=HUGGINGFACE_API_KEY&envDescription=Hugging%20Face%20API%20Key%20for%20AI%20diagram%20generation&envLink=https://huggingface.co/settings/tokens)
+
 ## ✨ Features
 
 ### 🎨 Visual Customization
@@ -52,12 +54,22 @@ A modern, feature-rich web application that converts natural language prompts in
 
 ## 🚀 Getting Started
 
-### Prerequisites
+### Quick Deploy
+
+Deploy to Vercel with one click:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/KRITHIKR007/Flow-chart-maker&env=HUGGINGFACE_API_KEY&envDescription=Hugging%20Face%20API%20Key%20for%20AI%20diagram%20generation&envLink=https://huggingface.co/settings/tokens)
+
+See [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for detailed deployment instructions.
+
+### Local Development
+
+#### Prerequisites
 
 - Node.js 18+ installed
 - Hugging Face API token (free at [huggingface.co](https://huggingface.co))
 
-### Installation
+#### Installation
 
 1. Clone the repository:
 ```bash
